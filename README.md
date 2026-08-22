@@ -99,10 +99,10 @@ Content-Type: application/json
 ## App
 
 The Realm ships the WhatsBeenTried.org app in [`apps/`](apps/). Installing the Realm surfaces it
-in the artifact browser and serves it at `/apps/whatsbeentried.html` in an authenticated
+in the artifact browser and serves it at `/apps/workspace/whatsbeentried.html` in an authenticated
 world session (a user app of the same name overrides it). The stylesheet and script are
 referenced by single-segment relative paths and the header image is inlined in the
-stylesheet, matching the host's flat `/apps/{name}` serving model.
+stylesheet, matching the host's `/apps/{scope}/{name}` serving model.
 
 ## Build and verify
 
