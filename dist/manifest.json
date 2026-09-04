@@ -1,0 +1,504 @@
+{
+  "version": 1,
+  "generatedAt": "2026-09-04T15:36:38.814Z",
+  "entries": [
+    {
+      "namespace": "whatsbeentried",
+      "name": "detailsByNctIds",
+      "description": "Fetch current protocol detail for selected NCT ids. Selection keeps this from becoming N+1.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "nctIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "nctIds"
+        ]
+      },
+      "outputSchema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "detailId": {
+              "type": "string"
+            },
+            "nctId": {
+              "type": "string"
+            },
+            "briefSummary": {
+              "type": "string"
+            },
+            "detailedDescription": {
+              "type": "string"
+            },
+            "enrollment": {
+              "type": "number"
+            },
+            "sourceUpdatedAt": {
+              "type": "string"
+            },
+            "hasResults": {
+              "type": "boolean"
+            },
+            "rawOutcomeCount": {
+              "type": "number"
+            },
+            "rawReferenceCount": {
+              "type": "number"
+            },
+            "outcomes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "outcomeId": {
+                    "type": "string"
+                  },
+                  "nctId": {
+                    "type": "string"
+                  },
+                  "outcomeType": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "const": "PRIMARY"
+                      },
+                      {
+                        "type": "string",
+                        "const": "SECONDARY"
+                      },
+                      {
+                        "type": "string",
+                        "const": "OTHER"
+                      }
+                    ]
+                  },
+                  "ordinal": {
+                    "type": "number"
+                  },
+                  "measure": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "timeFrame": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "outcomeId",
+                  "nctId",
+                  "outcomeType",
+                  "ordinal"
+                ]
+              }
+            },
+            "references": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "referenceId": {
+                    "type": "string"
+                  },
+                  "nctId": {
+                    "type": "string"
+                  },
+                  "pmid": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "citation": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "referenceId",
+                  "nctId",
+                  "pmid"
+                ]
+              }
+            }
+          },
+          "required": [
+            "detailId",
+            "nctId",
+            "hasResults",
+            "rawOutcomeCount",
+            "rawReferenceCount",
+            "outcomes",
+            "references"
+          ]
+        }
+      }
+    },
+    {
+      "namespace": "whatsbeentried",
+      "name": "publicationsByPmid",
+      "description": "Resolve many registry PMIDs through one NCBI ESummary request (max 200 per call).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "pmids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "pmids"
+        ]
+      },
+      "outputSchema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "pmid": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "publishedDate": {
+              "type": "string"
+            },
+            "journal": {
+              "type": "string"
+            },
+            "authorNames": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "doi": {
+              "type": "string"
+            },
+            "pubmedUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pmid",
+            "authorNames",
+            "pubmedUrl"
+          ]
+        }
+      }
+    },
+    {
+      "namespace": "whatsbeentried",
+      "name": "searchByDisease",
+      "description": "Search ClinicalTrials.gov for each disease query, paging without mirroring the registry. A source error throws: callers receive an explicit producer failure, never a misleading empty answer.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "pageSize": {
+            "type": "number"
+          },
+          "maxPages": {
+            "type": "number"
+          },
+          "sourceFilters": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "queries"
+        ]
+      },
+      "outputSchema": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string"
+            },
+            "scopeQuery": {
+              "type": "string"
+            },
+            "source": {
+              "type": "string"
+            },
+            "dataTimestamp": {
+              "type": "string"
+            },
+            "retrievedAt": {
+              "type": "string"
+            },
+            "sourceTotal": {
+              "type": "number"
+            },
+            "recordsFetched": {
+              "type": "number"
+            },
+            "pagesFetched": {
+              "type": "number"
+            },
+            "capped": {
+              "type": "boolean"
+            },
+            "trials": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "registryRecordId": {
+                    "type": "string"
+                  },
+                  "nctId": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "type": "string"
+                  },
+                  "officialTitle": {
+                    "type": "string"
+                  },
+                  "overallStatus": {
+                    "type": "string"
+                  },
+                  "studyType": {
+                    "type": "string"
+                  },
+                  "phases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "sponsor": {
+                    "type": "string"
+                  },
+                  "sponsorClass": {
+                    "type": "string"
+                  },
+                  "collaborators": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "conditions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "keywords": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "interventions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "interventionTypes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "countries": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "facilities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "investigators": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "investigatorAffiliations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "sex": {
+                    "type": "string"
+                  },
+                  "minimumAge": {
+                    "type": "string"
+                  },
+                  "maximumAge": {
+                    "type": "string"
+                  },
+                  "ageGroups": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "openTo": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "healthyVolunteers": {
+                    "oneOf": [
+                      {
+                        "type": "undefined"
+                      },
+                      {
+                        "type": "undefined"
+                      }
+                    ]
+                  },
+                  "enrollment": {
+                    "type": "number"
+                  },
+                  "startDate": {
+                    "type": "string"
+                  },
+                  "primaryCompletionDate": {
+                    "type": "string"
+                  },
+                  "completionDate": {
+                    "type": "string"
+                  },
+                  "firstPosted": {
+                    "type": "string"
+                  },
+                  "lastUpdated": {
+                    "type": "string"
+                  },
+                  "hasResults": {
+                    "type": "boolean"
+                  },
+                  "whyStopped": {
+                    "type": "string"
+                  },
+                  "registryUrl": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "registryRecordId",
+                  "nctId",
+                  "title",
+                  "phases",
+                  "collaborators",
+                  "conditions",
+                  "keywords",
+                  "interventions",
+                  "interventionTypes",
+                  "countries",
+                  "facilities",
+                  "investigators",
+                  "investigatorAffiliations",
+                  "ageGroups",
+                  "openTo",
+                  "hasResults",
+                  "registryUrl"
+                ]
+              }
+            },
+            "coverage": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "coverageId": {
+                    "type": "string"
+                  },
+                  "scopeQuery": {
+                    "type": "string"
+                  },
+                  "sourceFilters": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "const": "COMPLETE"
+                      },
+                      {
+                        "type": "string",
+                        "const": "PARTIAL_PAGE_CAP"
+                      }
+                    ]
+                  },
+                  "detail": {
+                    "type": "string"
+                  },
+                  "sourceTotal": {
+                    "type": "number"
+                  },
+                  "recordsFetched": {
+                    "type": "number"
+                  },
+                  "pagesFetched": {
+                    "type": "number"
+                  },
+                  "dataTimestamp": {
+                    "type": "string"
+                  },
+                  "retrievedAt": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "coverageId",
+                  "scopeQuery",
+                  "source",
+                  "state",
+                  "detail",
+                  "recordsFetched",
+                  "pagesFetched",
+                  "retrievedAt"
+                ]
+              }
+            }
+          },
+          "required": [
+            "runId",
+            "scopeQuery",
+            "source",
+            "retrievedAt",
+            "recordsFetched",
+            "pagesFetched",
+            "capped",
+            "trials",
+            "coverage"
+          ]
+        }
+      }
+    }
+  ]
+}
