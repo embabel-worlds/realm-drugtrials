@@ -126,7 +126,6 @@ curl -sS --get https://clinicaltrials.gov/api/v2/studies \
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Realm boundary, Virtual Cypher stages and view/Lens composition
 - [`docs/EVIDENCE_MODEL.md`](docs/EVIDENCE_MODEL.md) — claim boundaries, provenance and failure semantics
 - [`docs/RATE_LIMITS.md`](docs/RATE_LIMITS.md) — request budgets, batching, caches and public-service controls
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — public/private source expansion, jurisdictions, company context and conflicts-of-interest thought bubble
 
 The much larger prior-art and product evidence trail lives with the WhatsBeenTried.org flagship
 research in the target-customers repository; this repository is the executable Realm slice.
