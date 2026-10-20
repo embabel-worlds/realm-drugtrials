@@ -1,9 +1,0 @@
-# Optional curated examples. The Realm also supports any literal DiseaseScope.
-- type: DiseaseScope
-  data:
-    registryQuery: '"Long COVID" OR "Post-Acute Sequelae of SARS-CoV-2" OR PASC OR "Post-COVID Condition"'
-
-- type: DiseaseScope
-  data:
-    registryQuery: '("herpes simplex" OR HSV-1 OR HSV-2) AND vaccine NOT zoster'
-

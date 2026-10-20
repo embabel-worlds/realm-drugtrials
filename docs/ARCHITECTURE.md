@@ -63,7 +63,9 @@ count. A deliberate page cap produces `PARTIAL_PAGE_CAP` in the data itself.
 ## What is persisted
 
 - Realm definitions and generated handler bundle.
-- Optional tiny authored `DiseaseScope` examples.
+- No `DiseaseScope` nodes. A scope is only ever a literal on the query: once the store holds a
+  node of an anchor-only label, the host stops seeding keys no stored node holds, so a stored example
+  would leave every other disease search with no rows.
 - Host caches for bounded source calls, according to policy.
 - A future Watch may retain a compact answer snapshot/diff with source identities.
 
