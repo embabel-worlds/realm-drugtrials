@@ -1,34 +1,39 @@
 - name: DiseaseScope
   userAnchor: false
   description: |
-    A literal-seeded disease search scope. It is a query anchor, not a mirrored
-    disease ontology. The registryQuery is sent to ClinicalTrials.gov only when
-    a query traverses HAS_TRIAL_SEARCH.
+    One disease search scope, identified by registryQuery: the condition expression ClinicalTrials.gov
+    is asked about. It is a query anchor, not a mirrored disease ontology. The registryQuery is sent to
+    ClinicalTrials.gov only when a query traverses HAS_TRIAL_SEARCH.
   properties:
     registryQuery:
       identity: true
-      description: "Condition expression sent to ClinicalTrials.gov."
+      description: "The condition phrase or Essie expression to search, as the caller wrote it; rewritten into Essie syntax before it is sent (see TrialSearchRun.scopeQuery)."
 
 - name: TrialSearchRun
   userAnchor: false
   description: |
-    One source-bounded execution of a disease query. Its identity incorporates
-    the source data timestamp, making the evidence snapshot and coverage explicit.
+    One ClinicalTrials.gov search for one disease scope, identified by runId (source, query and the
+    registry's data timestamp). It holds the trials returned (RETURNED) and what the search covered
+    (HAS_COVERAGE). Fetched live on every query that traverses it, cached six hours; never a mirror.
   properties:
-    runId: { identity: true, description: "Stable source/query/data-version identity." }
+    runId: { identity: true, description: "clinicaltrials.gov:<url-encoded query>:<registry data timestamp>; the same query against the same registry release gives the same id." }
     scopeQuery: "Exact condition expression used at the source — the REWRITTEN one when the producer translated the caller's phrase."
     matchedFor: "The caller's phrase, echoed so the join matches what was asked rather than what was sent."
-    source: "Registry queried."
-    dataTimestamp: "Registry dataset timestamp reported by the source."
-    retrievedAt: "When this execution fetched the source."
-    sourceTotal: { type: int, description: "Total matches reported by the source, if supplied." }
-    recordsFetched: { type: int, description: "Records actually fetched and normalized." }
-    pagesFetched: { type: int, description: "Pages fetched."
-    }
-    capped: { type: boolean, description: "True when a deliberate page cap left more source pages." }
+    source: "The registry searched; always ClinicalTrials.gov."
+    dataTimestamp: "When the registry's dataset was last refreshed, as its /version reports it: ISO date-time in the registry's own clock, with no zone."
+    retrievedAt: "System clock when this search ran, ISO-8601 UTC with milliseconds (e.g. 2026-07-24T09:00:05.123Z)."
+    sourceTotal: { type: int, description: "Count of trials (unit: trials) the registry said match the query and its pushed filters; absent when it did not report one." }
+    recordsFetched: { type: int, description: "Trials actually fetched and normalized (unit: trials); below sourceTotal when capped is true." }
+    pagesFetched: { type: int, description: "Registry result pages read for this search, up to 1000 trials each; the producer stops at 10." }
+    capped: { type: boolean, description: "True when the page cap stopped the sweep with more registry pages left, so the trials returned are not the whole answer." }
   virtualJoins:
     - anchorLabel: DiseaseScope
       relationship: HAS_TRIAL_SEARCH
+      description: >-
+        One disease scope to the live registry search for it: one ClinicalTrials.gov sweep per scope
+        (up to 10 pages of 1000 trials), cached six hours. Traverse it, then RETURNED, for the trials of
+        a disease; HAS_COVERAGE says whether that list is complete. Filters on the trials' status,
+        study type, sex, eligibility, phase and country are pushed into the search.
       keyField: registryQuery
       recordKeyField: matchedFor
       producer: trialsByDisease
@@ -49,82 +54,111 @@
 
 - name: TrialCoverage
   userAnchor: false
-  description: "Machine-readable declaration of what a source call did and did not cover."
+  description: |
+    One coverage note for one registry search, identified by coverageId: what the search fetched and
+    whether it reached every matching trial. Read it before quoting a count: PARTIAL_PAGE_CAP means the
+    trial list is a prefix of the registry's answer, not all of it.
   properties:
-    coverageId: { identity: true, description: "Coverage declaration identity." }
-    scopeQuery: "Exact source query."
-    source: "Source name."
-    state: "COMPLETE or PARTIAL_PAGE_CAP."
-    detail: "Human-readable coverage explanation."
-    sourceTotal: { type: int, description: "Total matches reported by source, if available." }
-    recordsFetched: { type: int, description: "Records fetched." }
-    pagesFetched: { type: int, description: "Pages fetched." }
-    dataTimestamp: "Source dataset timestamp."
-    retrievedAt: "Retrieval timestamp."
+    coverageId: { identity: true, description: "The search run's runId followed by :coverage; one coverage note per run." }
+    scopeQuery: "The exact Essie condition expression sent to the registry for this search."
+    source: "The registry searched; always ClinicalTrials.gov."
+    state:
+      values: [COMPLETE, PARTIAL_PAGE_CAP]
+      description: "COMPLETE: every page the registry returned was read. PARTIAL_PAGE_CAP: the sweep stopped at its page cap with more pages left."
+    detail: "One sentence for a person: how many pages and trials were read, and whether more existed."
+    sourceTotal: { type: int, description: "Count of trials (unit: trials) the registry reported as matching; absent when it reported none." }
+    recordsFetched: { type: int, description: "Trials actually fetched (unit: trials); equals sourceTotal when state is COMPLETE." }
+    pagesFetched: { type: int, description: "Registry result pages read, up to 1000 trials each; at the cap of 10 when state is PARTIAL_PAGE_CAP." }
+    dataTimestamp: "When the registry's dataset was last refreshed: ISO date-time in the registry's own clock, with no zone."
+    retrievedAt: "System clock when the search ran, ISO-8601 UTC with milliseconds."
 
 - name: ClinicalTrial
   userAnchor: false
   description: |
-    A current ClinicalTrials.gov study record, transiently materialized. A
-    registry record is evidence about the study, not a guarantee of efficacy,
-    publication, regulatory approval, or absence of misconduct.
+    One ClinicalTrials.gov study, identified by registryRecordId (its NCT id, e.g. NCT05585970), as the
+    registry holds it now. Reached from a disease search (RETURNED) or directly by NCT id. Live, never
+    mirrored. A registry record is evidence about the study, not a guarantee of efficacy, publication,
+    regulatory approval, or absence of misconduct.
   properties:
-    registryRecordId: { identity: true, description: "ClinicalTrials.gov NCT identifier." }
-    nctId: "ClinicalTrials.gov NCT identifier."
-    title: "Brief public title."
-    officialTitle: "Official title, if present."
-    overallStatus: "Current registry recruitment/conduct status."
-    studyType: "INTERVENTIONAL, OBSERVATIONAL, EXPANDED_ACCESS, or source value."
-    phases: { cardinality: LIST, description: "Registry phases."
-    }
-    sponsor: "Lead sponsor named by the registry."
-    sponsorClass: "Registry sponsor class."
-    collaborators: { cardinality: LIST, description: "Named collaborators." }
-    conditions: { cardinality: LIST, description: "Registered conditions." }
-    keywords: { cardinality: LIST, description: "Registered keywords." }
-    interventions: { cardinality: LIST, description: "Registered intervention names." }
-    interventionTypes: { cardinality: LIST, description: "Registered intervention types." }
-    countries: { cardinality: LIST, description: "Countries represented by registered locations." }
+    registryRecordId: { identity: true, description: "The NCT identifier: NCT followed by eight digits, upper case." }
+    nctId: "The same NCT identifier as registryRecordId, kept for readability in result tables."
+    title: "Brief public title the sponsor registered; falls back to the official title, then the NCT id."
+    officialTitle: "The formal protocol title; absent when the sponsor registered none."
+    overallStatus:
+      values: [ACTIVE_NOT_RECRUITING, COMPLETED, ENROLLING_BY_INVITATION, NOT_YET_RECRUITING, RECRUITING, SUSPENDED, TERMINATED, WITHDRAWN, AVAILABLE, NO_LONGER_AVAILABLE, TEMPORARILY_NOT_AVAILABLE, APPROVED_FOR_MARKETING, WITHHELD, UNKNOWN]
+      description: "Current recruitment status, upper case. UNKNOWN: past its completion date and not verified for 2 years. The last five apply to expanded-access records."
+    studyType:
+      values: [INTERVENTIONAL, OBSERVATIONAL, EXPANDED_ACCESS]
+      description: "INTERVENTIONAL (assigns a treatment), OBSERVATIONAL (watches, assigns nothing) or EXPANDED_ACCESS (treatment outside a trial)."
+    phases: { cardinality: LIST, description: "Registry phases, any of EARLY_PHASE1, PHASE1, PHASE2, PHASE3, PHASE4 or NA (not applicable); two for a combined phase, e.g. PHASE1 and PHASE2." }
+    sponsor: "Lead sponsor's name exactly as registered; the same company may be spelled differently across trials."
+    sponsorClass:
+      values: [INDUSTRY, NIH, FED, OTHER_GOV, INDIV, NETWORK, OTHER, AMBIG, UNKNOWN]
+      description: "Lead sponsor class: INDUSTRY, NIH, FED (other US federal), OTHER_GOV, INDIV, NETWORK, OTHER (e.g. universities, hospitals), AMBIG or UNKNOWN."
+    collaborators: { cardinality: LIST, description: "Names of organisations the registry lists as collaborators, as registered; empty when there are none." }
+    conditions: { cardinality: LIST, description: "Conditions the sponsor registered the trial for, in their own words." }
+    keywords: { cardinality: LIST, description: "Free-text keywords the sponsor registered; often empty." }
+    interventions: { cardinality: LIST, description: "Names of the drugs, devices or procedures tested, as registered (one per distinct name)." }
+    interventionTypes: { cardinality: LIST, description: "Kinds of intervention tested, e.g. DRUG, BIOLOGICAL, DEVICE, PROCEDURE, BEHAVIORAL, OTHER; distinct values, upper case." }
+    countries: { cardinality: LIST, description: "Countries with at least one registered site, by the registry's English name (e.g. United States, Australia)." }
     facilities: { cardinality: LIST, description: "Named sites where the trial runs — hospitals, universities, clinics." }
     investigators: { cardinality: LIST, description: "Overall officials named by the registry, usually principal investigators." }
     investigatorAffiliations: { cardinality: LIST, description: "Affiliations the registry records for those officials." }
-    sex: "Who may enrol by sex, as the registry states it: ALL, FEMALE or MALE."
+    sex:
+      values: [ALL, FEMALE, MALE]
+      description: "Who may enrol by sex, as the registry states it: ALL, FEMALE or MALE. MALE means men only; for 'open to men' ask openTo."
     openTo: { cardinality: LIST, description: "Who may actually enrol — ['MALE','FEMALE'] when the trial is open to all. Ask this, not `sex`, for 'trials open to men': a trial whose sex is ALL admits men, while sex = 'MALE' means men ONLY and finds a tiny fraction of what is open to them." }
     minimumAge: "Lowest age eligible, as text with its unit (the registry's own form, e.g. '18 Years')."
     maximumAge: "Highest age eligible, as text with its unit. Absent when the trial sets no upper bound."
     ageGroups: { cardinality: LIST, description: "The registry's own cohort labels — CHILD, ADULT, OLDER_ADULT. Carried verbatim rather than derived from the age bounds, because the registry's label is what a reader of the record sees." }
     healthyVolunteers: { type: boolean, description: "Whether the trial accepts healthy volunteers." }
-    enrollment: { type: int, description: "Actual or estimated enrollment count."
-    }
-    startDate: "Registered start date."
-    primaryCompletionDate: "Registered primary completion date."
-    completionDate: "Registered completion date."
-    firstPosted: "First-posted date."
-    lastUpdated: "Last update posted date."
+    enrollment: { type: int, description: "Participants (unit: people) enrolled, actual once the trial has finished, the sponsor's estimate before." }
+    startDate: "When the first participant enrolled (or is expected to): YYYY-MM-DD or YYYY-MM, as the registry holds it."
+    primaryCompletionDate: "When the primary outcome's last measurement was (or is expected to be) taken: YYYY-MM-DD or YYYY-MM."
+    completionDate: "When the whole study ended (or is expected to): YYYY-MM-DD or YYYY-MM; absent when never registered."
+    firstPosted: "Business date the registry first published the record, YYYY-MM-DD."
+    lastUpdated: "Business date the registry last posted a change to the record, YYYY-MM-DD."
     hasResults: { type: boolean, description: "Whether the current registry record includes a results section." }
-    whyStopped: "Structured registry reason for stopping, when present."
+    whyStopped: "The sponsor's stated reason, free text, for a trial that is TERMINATED, SUSPENDED or WITHDRAWN; absent otherwise or when none was given."
     registryUrl: "Direct ClinicalTrials.gov record link."
+  examples:
+    - q: "recruiting long covid trials with a site in Australia"
+      cypher: |
+        MATCH (:DiseaseScope {registryQuery: 'Long COVID'})-[:HAS_TRIAL_SEARCH]->(:TrialSearchRun)-[:RETURNED]->(t:ClinicalTrial)
+        WHERE t.overallStatus = 'RECRUITING' AND 'Australia' IN t.countries
+        RETURN t.nctId AS nctId, t.title AS title, t.sponsor AS sponsor, t.phases AS phases
+        ORDER BY t.nctId
+    - q: "which drugs tested in parkinson's trials already carry a boxed warning"
+      cypher: |
+        MATCH (:DiseaseScope {registryQuery: 'Parkinson Disease'})-[:HAS_TRIAL_SEARCH]->(:TrialSearchRun)-[:RETURNED]->(t:ClinicalTrial)
+        WHERE 'PHASE3' IN t.phases
+        MATCH (t)-[:TESTS_LABELLED_DRUG]->(d:DrugLabel)
+        WHERE d.boxedWarning IS NOT NULL
+        RETURN DISTINCT d.intervention AS drug, d.brandName AS brand, collect(t.nctId) AS trials
 
 - name: TrialDetail
   userAnchor: false
-  description: "Current expanded protocol detail for one selected trial."
+  description: |
+    The full protocol detail for one trial, identified by detailId (clinicaltrials.gov:<NCT id>): summary,
+    description, declared outcomes (DECLARES_OUTCOME) and PubMed-bearing references (CITES_REFERENCE).
+    Read live from ClinicalTrials.gov when a query asks for it, up to 100 trials per call.
   properties:
-    detailId: { identity: true, description: "Source-qualified detail identity." }
+    detailId: { identity: true, description: "clinicaltrials.gov: followed by the NCT id; one detail per trial." }
     nctId: "NCT id linking this detail to its trial anchor."
-    briefSummary: "Registry brief summary."
-    detailedDescription: "Registry detailed description."
-    enrollment: { type: int, description: "Actual or estimated enrollment."
-    }
-    sourceUpdatedAt: "Registry last-update date."
-    hasResults: { type: boolean, description: "Current registry record includes results."
-    }
-    rawOutcomeCount: { type: int, description: "Protocol outcomes extracted."
-    }
-    rawReferenceCount: { type: int, description: "PMID-bearing registry references extracted."
-    }
+    briefSummary: "The sponsor's short plain-language summary of the trial, as registered."
+    detailedDescription: "The sponsor's longer protocol description; absent when none was registered."
+    enrollment: { type: int, description: "Participants (unit: people) enrolled, actual once finished, estimated before." }
+    sourceUpdatedAt: "Business date the registry last posted a change to the record, YYYY-MM-DD."
+    hasResults: { type: boolean, description: "Whether the current registry record includes a posted results section." }
+    rawOutcomeCount: { type: int, description: "How many primary, secondary and other outcomes the protocol declares (unit: outcomes)." }
+    rawReferenceCount: { type: int, description: "How many registry references carry a PubMed id (unit: references); references without one are not counted." }
   virtualJoins:
     - anchorLabel: ClinicalTrial
       relationship: HAS_CURRENT_DETAIL
+      description: >-
+        A trial to its full protocol detail (one detail per trial), and through it to declared outcomes
+        and cited publications. One ClinicalTrials.gov call per 100 trials, capped at 20 trials per
+        query: pick the trials first (by NCT id or a narrow filter), then traverse.
       keyField: registryRecordId
       recordKeyField: nctId
       producer: trialDetailsByNct
@@ -139,45 +173,70 @@
           relationship: CITES_REFERENCE
           records: "$.references[*]"
           id: referenceId
+  examples:
+    - q: "what has been published from trial NCT05585970"
+      cypher: |
+        MATCH (:ClinicalTrial {registryRecordId: 'NCT05585970'})-[:HAS_CURRENT_DETAIL]->(:TrialDetail)-[:CITES_REFERENCE]->(r:TrialReference)
+        OPTIONAL MATCH (r)-[:RESOLVES_TO]->(p:Publication)
+        RETURN r.pmid AS pmid, r.type AS referenceType, p.title AS title, p.journal AS journal, p.publishedDate AS published
+    - q: "what are the primary outcomes of NCT05585970"
+      cypher: |
+        MATCH (:ClinicalTrial {registryRecordId: 'NCT05585970'})-[:HAS_CURRENT_DETAIL]->(:TrialDetail)-[:DECLARES_OUTCOME]->(o:TrialOutcome)
+        WHERE o.outcomeType = 'PRIMARY'
+        RETURN o.ordinal AS n, o.measure AS measure, o.timeFrame AS timeFrame
+        ORDER BY n
 
 - name: TrialOutcome
   userAnchor: false
-  description: "A primary, secondary, or other outcome declared in a trial protocol."
+  description: |
+    One outcome a trial's protocol declares, identified by outcomeId (<NCT id>:<outcomeType>:<ordinal>):
+    what is measured and when. It is the registered intention, not a result; results live in the
+    registry's results section, which hasResults on the trial flags.
   properties:
-    outcomeId: { identity: true, description: "NCT/type/ordinal identity." }
-    nctId: "Parent NCT id."
-    outcomeType: "PRIMARY, SECONDARY, or OTHER."
-    ordinal: { type: int, description: "Position within the outcome group."
-    }
-    measure: "Outcome measure."
-    description: "Outcome description."
-    timeFrame: "Registered measurement time frame."
+    outcomeId: { identity: true, description: "<NCT id>:<PRIMARY|SECONDARY|OTHER>:<ordinal>, e.g. NCT05585970:PRIMARY:1." }
+    nctId: "NCT id of the trial that declares this outcome."
+    outcomeType:
+      values: [PRIMARY, SECONDARY, OTHER]
+      description: "Which group the protocol lists it in: PRIMARY (what the trial is powered to show), SECONDARY or OTHER."
+    ordinal: { type: int, description: "1-based position within its outcome group, in registry order." }
+    measure: "What is measured, as the sponsor titled the outcome measure."
+    description: "The sponsor's fuller explanation of the measure; absent when none was registered."
+    timeFrame: "When the measure is taken, free text as registered (e.g. 'Baseline and 12 weeks')."
 
 - name: TrialReference
   userAnchor: false
-  description: "A PMID-bearing publication reference declared in a registry record."
+  description: |
+    One PubMed-bearing citation a trial's registry record lists, identified by referenceId
+    (<NCT id>:<PMID>:<ordinal>). Citations without a PubMed id are left out. RESOLVES_TO reaches the
+    publication's PubMed metadata.
   properties:
-    referenceId: { identity: true, description: "Trial/PMID/ordinal identity." }
-    nctId: "Parent NCT id."
-    pmid: "PubMed identifier."
-    type: "Registry reference type."
+    referenceId: { identity: true, description: "<NCT id>:<PMID>:<ordinal>, the ordinal being the citation's position in the record." }
+    nctId: "NCT id of the trial whose record cites it."
+    pmid: "PubMed identifier, digits only."
+    type:
+      values: [BACKGROUND, RESULT, DERIVED]
+      description: "BACKGROUND: cited as context. RESULT: reports this trial's results (sponsor-supplied). DERIVED: matched to the trial by the registry from PubMed."
     citation: "Citation as supplied by the registry."
 
 - name: Publication
   userAnchor: false
-  description: "PubMed metadata resolved live for a trial's registered PMID reference."
+  description: |
+    One PubMed article, identified by pmid, resolved live for a trial's registered reference: title,
+    journal, date, authors and DOI. Read from NCBI E-utilities, up to 200 per call, cached a day.
   properties:
-    pmid: { identity: true, description: "PubMed identifier." }
-    title: "Publication title."
-    publishedDate: "Publication date as PubMed reports it."
-    journal: "Journal name."
-    authorNames: { cardinality: LIST, description: "Author names."
-    }
+    pmid: { identity: true, description: "PubMed identifier, digits only." }
+    title: "Article title as PubMed records it."
+    publishedDate: "Publication date as PubMed's pubdate gives it: free form, usually 'YYYY Mon D' or 'YYYY Mon' (e.g. '2023 Mar 5'); not ISO."
+    journal: "Full journal name, or PubMed's abbreviated source when the full name is missing."
+    authorNames: { cardinality: LIST, description: "Authors in byline order, as PubMed writes them: surname then initials, e.g. 'Smith JA'." }
     doi: "DOI, when PubMed supplies one."
     pubmedUrl: "Direct PubMed link."
   virtualJoins:
     - anchorLabel: TrialReference
       relationship: RESOLVES_TO
+      description: >-
+        A trial's cited reference to the PubMed article it names (at most one). All references in a
+        query are resolved together, 200 PMIDs per NCBI call; a PMID PubMed does not hold yields none.
       keyField: pmid
       recordKeyField: pmid
       producer: publicationsByPmid
@@ -188,14 +247,13 @@
 - name: DrugLabel
   userAnchor: false
   description: |
-    The current FDA-approved labelling for a drug a trial is testing.
+    The current FDA-approved label for one drug a trial tests, identified by intervention (the trial's
+    own intervention name it was found for). Read from openFDA. An intervention with no label yields no
+    node: "no approved labelling", which for an investigational compound is expected, not a data gap.
 
     The point of joining it: a trial registry records what is being tested, never what has been approved.
     Reading the two together separates a trial of an established product from a trial of something that
     has never carried a label — a distinction the registry alone cannot make.
-
-    An intervention with no label yields no node. That absence means "no approved labelling", which for
-    an investigational compound is the expected state and not a gap in the data.
   properties:
     intervention:
       identity: true
@@ -203,14 +261,18 @@
     brandName: "Brand name on the label."
     genericName: "Generic name on the label, which is often a combination product rather than the single agent the trial names."
     manufacturer: "Labeller as the regulator records them."
-    route: "Route of administration."
-    applicationNumber: "Regulatory application number."
-    effectiveTime: "When this version of the labelling took effect."
+    route: "Route of administration, upper case as openFDA writes it (e.g. ORAL, INTRAVENOUS, SUBCUTANEOUS)."
+    applicationNumber: "FDA application number: NDA, ANDA or BLA followed by digits (e.g. NDA021995)."
+    effectiveTime: "Business date this version of the labelling took effect, YYYYMMDD with no separators (e.g. 20240115)."
     boxedWarning: "The label's boxed warning. Present ONLY when the label carries one — its absence is the strongest safety signal a label has, so read the missing property as 'none', not as 'unknown'."
   virtualJoins:
     # `interventions` is LIST-valued: one key per drug the trial tests, not one key for the list.
     - anchorLabel: ClinicalTrial
       relationship: TESTS_LABELLED_DRUG
+      description: >-
+        A trial to the current FDA label of each drug it tests (zero or one per intervention). One
+        openFDA call per distinct intervention name, at most 60 per query, so narrow the trials first.
+        No edge means no approved label was found, which is the usual state for an investigational drug.
       keyField: interventions
       recordKeyField: intervention
       producer: drugLabelsByName

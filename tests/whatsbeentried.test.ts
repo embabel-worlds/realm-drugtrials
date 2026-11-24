@@ -57,12 +57,13 @@ describe("live adapter orchestration", () => {
     expect(searchStudies).toHaveBeenNthCalledWith(1, expect.objectContaining({ pageSize: 1000 }));
   });
 
-  it("deduplicates selected ids before detail fetch", async () => {
-    const getStudy = vi.fn().mockResolvedValue(ctStudy("NCT00000001"));
-    const ctx = mockGateway<GenericGatewayContext>({ clinicalTrials: { getStudy } });
-    const detail = await detailsByNctIds(ctx, { nctIds: ["nct00000001", "NCT00000001"] });
-    expect(detail).toHaveLength(1);
-    expect(getStudy).toHaveBeenCalledTimes(1);
+  it("deduplicates selected ids and fetches them in one registry call", async () => {
+    const searchStudies = vi.fn().mockResolvedValue({ studies: [ctStudy("NCT00000001"), ctStudy("NCT00000002")] });
+    const ctx = mockGateway<GenericGatewayContext>({ clinicalTrials: { searchStudies } });
+    const detail = await detailsByNctIds(ctx, { nctIds: ["nct00000001", "NCT00000001", "NCT00000002"] });
+    expect(detail).toHaveLength(2);
+    expect(searchStudies).toHaveBeenCalledOnce();
+    expect(searchStudies).toHaveBeenCalledWith(expect.objectContaining({ "filter.ids": "NCT00000001,NCT00000002" }));
   });
 
   it("resolves many PMIDs in one ESummary call", async () => {

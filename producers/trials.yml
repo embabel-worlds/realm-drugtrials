@@ -106,6 +106,12 @@
   kind: remote
   operation: detailsByNctIds
   keyArg: nctIds
+  # One registry search by `filter.ids` per 100 NCT ids (the handler's chunk), so a set of trials is
+  # one call rather than one per trial.
+  maxKeysPerCall: 100
+  # Read by id only: the registry is asked for these trials and nothing narrower, and every property
+  # filter is applied to the records that come back.
+  pushdown: []
   records: "$[*]"
   cache:
     kind: ttl
@@ -121,6 +127,11 @@
   kind: remote
   operation: publicationsByPmid
   keyArg: pmids
+  # ESummary resolves up to 200 PMIDs in one request, and the handler drops anything past 200, so the
+  # engine must never hand it more.
+  maxKeysPerCall: 200
+  # Read by id only: ESummary takes ids and returns their summaries, with nothing to filter on.
+  pushdown: []
   records: "$[*]"
   cache:
     kind: ttl
@@ -150,6 +161,9 @@
   echoKeyAs: intervention
   args:
     limit: 1        # the current label; the full revision history is not the question here
+  # The name IS the search: keyTemplate fills openFDA's one `search` parameter with it, and a label
+  # property filter (route, manufacturer) is applied to the single label that comes back.
+  pushdown: []
   records: "$.results[*]"
   project:
     brandName: openfda.brand_name.0

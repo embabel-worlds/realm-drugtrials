@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "generatedAt": "2026-09-04T15:36:38.814Z",
+  "generatedAt": "2026-11-24T14:17:02.179Z",
   "entries": [
     {
       "namespace": "whatsbeentried",
       "name": "detailsByNctIds",
-      "description": "Fetch current protocol detail for selected NCT ids. Selection keeps this from becoming N+1.",
+      "description": "Fetch current protocol detail for selected NCT ids: one registry search by id per chunk of ids.",
       "inputSchema": {
         "type": "object",
         "properties": {

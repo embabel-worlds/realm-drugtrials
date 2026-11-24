@@ -102,11 +102,22 @@ async function searchByDisease(ctx, args) {
     }
     return runs;
 }
-/** Fetch current protocol detail for selected NCT ids. Selection keeps this from becoming N+1. */
+/* How many NCT ids go into one `filter.ids` request. The registry pages at 1000, so a chunk of this
+ * size always fits on one page; it is kept well under that so the query string stays short. The
+ * producer's maxKeysPerCall matches it, so the engine never hands over more than one chunk. */
+const DETAIL_IDS_PER_CALL = 100;
+/** Fetch current protocol detail for selected NCT ids: one registry search by id per chunk of ids. */
 async function detailsByNctIds(ctx, args) {
     const api = gatewayOf(ctx).clinicalTrials;
     const ids = [...new Set(args.nctIds.map((id) => id.trim().toUpperCase()).filter(Boolean))];
-    const studies = await Promise.all(ids.map((nctId) => api.getStudy({ nctId })));
+    /* `filter.ids` returns the same full record `/studies/{nctId}` does, so twenty trials cost one
+     * call rather than twenty. An id the registry does not hold is simply absent from the page. */
+    const studies = [];
+    for (let i = 0; i < ids.length; i += DETAIL_IDS_PER_CALL) {
+        const chunk = ids.slice(i, i + DETAIL_IDS_PER_CALL);
+        const response = await api.searchStudies({ "filter.ids": chunk.join(","), pageSize: 1000 });
+        studies.push(...(response.studies ?? []));
+    }
     return studies.flatMap((s) => {
         const detail = (0, normalize_1.normalizeDetail)(s);
         return detail ? [detail] : [];

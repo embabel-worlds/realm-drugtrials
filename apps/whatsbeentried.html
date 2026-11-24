@@ -6,6 +6,12 @@
   <meta name="description" content="WhatsBeenTried.org shows what medical research exists for a disease, what stopped, what produced results, and what remains unknown.">
   <title>WhatsBeenTried.org — the living record of medical research</title>
   <link rel="stylesheet" href="./whatsbeentried.css">
+  <style>
+    body { padding-bottom: 28px; }
+    .how-it-works { display: none; padding: 2rem 0 4rem; line-height: 1.55; }
+    .how-it-works:target { display: block; }
+    .how-it-works pre { overflow-x: auto; padding: .75rem 1rem; background: rgba(0,0,0,.05); border-radius: 6px; font-size: .85rem; }
+  </style>
 </head>
 <body>
   <header class="masthead">
@@ -103,8 +109,52 @@
     </section>
   </main>
 
-  <footer><div class="shell"><span>WhatsBeenTried.org · the living public record of medical research</span><span>Not medical advice · verify consequential decisions at the cited source</span></div></footer>
+
+  <section id="how-it-works" class="shell how-it-works">
+    <h2>How it works</h2>
+    <h3>The data, and how fresh it is</h3>
+    <p>Nothing here is a copy. Each search asks ClinicalTrials.gov for the disease you typed, live, after
+    rewriting your words into the registry's own search syntax; the answer is held for six hours, and the
+    registry's own data timestamp is shown beside it. A search reads up to ten pages of 1,000 trials, and
+    when the registry has more it says so (coverage <code>PARTIAL_PAGE_CAP</code>) rather than presenting a
+    prefix as the whole. Status, age-cohort and "open to" filters are sent to the registry, so a narrowed
+    search fetches only the trials it shows. Sponsors resolve to company profiles through realm-research.</p>
+    <h3>The queries that run</h3>
+    <p><b>Landscape</b> (lens <code>trial-landscape</code>, over the view <code>DiseaseTrialRuns</code>):</p>
+    <pre><code>MATCH (run:DiseaseTrialRuns {registryQuery: $query})
+MATCH (run)-[:HAS_COVERAGE]-&gt;(coverage:TrialCoverage)
+OPTIONAL MATCH (run)-[:RETURNED]-&gt;(trial:ClinicalTrial)
+WHERE trial.overallStatus = $status AND $sex IN trial.openTo AND $ageGroup IN trial.ageGroups
+RETURN run.dataTimestamp, run.sourceTotal, coverage.state, trial.nctId, trial.title, trial.overallStatus, …
+ORDER BY trial.lastUpdated DESC, trial.nctId ASC</code></pre>
+    <p>(each <code>WHERE</code> clause is present only when its filter is set).</p>
+    <p><b>Themes</b> (lens <code>trial-themes</code>):</p>
+    <pre><code>MATCH (scope:DiseaseScope {registryQuery: $query})-[:HAS_TRIAL_SEARCH]-&gt;(run:TrialSearchRun)
+MATCH (run)-[:RETURNED]-&gt;(trial:ClinicalTrial)
+RETURN cluster(trial.title, $topics) AS clusters, summarize(trial.title, $brief) AS digest, count(trial) AS trialCount</code></pre>
+    <p><b>Sponsors</b> (lens <code>trial-sponsors</code>):</p>
+    <pre><code>MATCH (scope:DiseaseScope {registryQuery: $query})-[:HAS_TRIAL_SEARCH]-&gt;(run:TrialSearchRun)
+MATCH (run)-[:RETURNED]-&gt;(trial:ClinicalTrial)
+OPTIONAL MATCH (trial)-[:SPONSORED_BY]-&gt;(company:CorporateEntity)
+RETURN trial.nctId, trial.sponsor, trial.sponsorClass, company.ultimateOwner, company.country, company.industry</code></pre>
+    <h3>What an empty panel means</h3>
+    <p>An empty trial list means the registry holds no trial matching the disease and the filters you set,
+    not that no research exists: other registries and unregistered work are not searched. A failed search
+    shows an error, never an empty list. An empty sponsor-owner column means the sponsor's name could not
+    be resolved to a company, not that it has no owner. An empty themes panel means there were no trials
+    to characterise.</p>
+    <h3>What this did that a conventional stack could not</h3>
+    <p>A conventional site would mirror the registry nightly and filter its copy. Here the question is
+    the query: the filters reach the registry itself, the result joins company profiles from another
+    source in the same graph query, the themes are computed by the engine over exactly the rows shown,
+    and every answer carries its own coverage and source timestamp. Nothing is stored afterwards.</p>
+  </section>
+
+  <footer><div class="shell"><span>WhatsBeenTried.org · the living public record of medical research · <a href="#how-it-works">How it works</a></span><span>Not medical advice · verify consequential decisions at the cited source</span></div></footer>
   <script src="./world-paths.js"></script>
   <script src="./whatsbeentried.js"></script>
+<div id="embabel-badge" style="position:fixed;bottom:0;left:0;right:0;text-align:center;padding:6px 0;background:rgba(10,10,15,0.9);border-top:1px solid rgba(99,192,245,0.2);font-size:0.75rem;color:#6b7280;z-index:9999;pointer-events:none;">
+  Created with <a href="https://worlds.embabel.com" target="_blank" rel="noopener noreferrer" style="color:#63c0f5;text-decoration:none;pointer-events:auto;">Embabel Worlds</a>
+</div>
 </body>
 </html>
