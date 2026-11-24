@@ -163,7 +163,10 @@
       recordKeyField: nctId
       producer: trialDetailsByNct
       maxAnchors: 20
-      maxFanoutTotal: 20
+      # The detail brings its outcomes and references with it, and those count towards the fan-out:
+      # a single trial can declare forty outcomes. maxAnchors bounds the trials; this only has to
+      # hold twenty trials' children (at 20 a trial with 19 outcomes and 6 references stopped short).
+      maxFanoutTotal: 4000
       brings:
         - childType: TrialOutcome
           relationship: DECLARES_OUTCOME
