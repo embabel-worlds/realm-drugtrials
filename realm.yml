@@ -12,9 +12,10 @@ url: https://github.com/johnsonr/realm-drugtrials
 category: science
 
 # The sponsor, collaborator, site and investigator edges (types/entities.yml) land on types and
-# producers realm-research owns.
+# producers realm-research owns. A soft requirement (a plain version): a host installs research
+# beside this realm, and a research whose version it cannot read still satisfies it.
 requires:
-  research: "[0.3.0,1.0.0)"
+  research: "0.3.0"
 tags:
   - clinical-trials
   - public-good
