@@ -161,6 +161,10 @@
   echoKeyAs: intervention
   args:
     limit: 1        # the current label; the full revision history is not the question here
+  # openFDA answers a name it has no label for with a 404 whose body says exactly this. That is the
+  # common, meaningful answer (most trial interventions are unapproved), so it is read as empty: no
+  # label row, no diagnostic, and the negative cache below remembers it.
+  emptyErrorPatterns: ["No matches found!"]
   # The name IS the search: keyTemplate fills openFDA's one `search` parameter with it, and a label
   # property filter (route, manufacturer) is applied to the single label that comes back.
   pushdown: []
