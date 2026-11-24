@@ -134,9 +134,6 @@ curl -sS --get https://clinicaltrials.gov/api/v2/studies \
 - [`docs/EVIDENCE_MODEL.md`](docs/EVIDENCE_MODEL.md) — claim boundaries, provenance and failure semantics
 - [`docs/RATE_LIMITS.md`](docs/RATE_LIMITS.md) — request budgets, batching, caches and public-service controls
 
-The much larger prior-art and product evidence trail lives with the WhatsBeenTried.org flagship
-research in the target-customers repository; this repository is the executable Realm slice.
-
 ## Source terms
 
 The Realm requests public factual metadata from ClinicalTrials.gov and NCBI E-utilities. It does
