@@ -11,6 +11,8 @@
   },
   "devDependencies": {
     "@embabel/runtime-types": "file:../assistant/tooling/runtime-types",
+    "@types/node": "^20.19.43",
+    "ajv": "^8.20.0",
     "typescript": "^5.4.0",
     "vitest": "^3.2.7"
   }

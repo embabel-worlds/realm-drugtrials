@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedAt": "2026-11-24T14:17:02.179Z",
+  "generatedAt": "2026-11-24T21:14:23.982Z",
   "entries": [
     {
       "namespace": "whatsbeentried",
@@ -64,19 +64,11 @@
                     "type": "string"
                   },
                   "outcomeType": {
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "const": "PRIMARY"
-                      },
-                      {
-                        "type": "string",
-                        "const": "SECONDARY"
-                      },
-                      {
-                        "type": "string",
-                        "const": "OTHER"
-                      }
+                    "type": "string",
+                    "enum": [
+                      "PRIMARY",
+                      "SECONDARY",
+                      "OTHER"
                     ]
                   },
                   "ordinal": {
@@ -367,14 +359,7 @@
                     }
                   },
                   "healthyVolunteers": {
-                    "oneOf": [
-                      {
-                        "type": "undefined"
-                      },
-                      {
-                        "type": "undefined"
-                      }
-                    ]
+                    "type": "boolean"
                   },
                   "enrollment": {
                     "type": "number"
@@ -443,15 +428,10 @@
                     "type": "string"
                   },
                   "state": {
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "const": "COMPLETE"
-                      },
-                      {
-                        "type": "string",
-                        "const": "PARTIAL_PAGE_CAP"
-                      }
+                    "type": "string",
+                    "enum": [
+                      "COMPLETE",
+                      "PARTIAL_PAGE_CAP"
                     ]
                   },
                   "detail": {
