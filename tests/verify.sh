@@ -138,8 +138,11 @@ check("  ...with PubMed's titles", 0, sum(1 for r in pubs if titles.get(r["pmid"
 
 drugs = sorted({i["name"] for i in study["armsInterventionsModule"]["interventions"]})
 labelled = {n: a for n, a in ((n, fda_label(n)) for n in drugs) if a is not False}
-r = kg("MATCH (t:ClinicalTrial {registryRecordId: '%s'})-[:TESTS_LABELLED_DRUG]->(d:DrugLabel) "
-       "RETURN d.intervention AS drug, d.applicationNumber AS app" % TRIAL)
+# The label hop is keyed on the trial's interventions, which only the search that returned the trial
+# carries, so this one walks from the scope (a pinned trial holds its NCT id and nothing else).
+r = kg("MATCH (:DiseaseScope {registryQuery: '%s'})-[:HAS_TRIAL_SEARCH]->(:TrialSearchRun)-[:RETURNED]->(t:ClinicalTrial) "
+       "WHERE t.registryRecordId = '%s' MATCH (t)-[:TESTS_LABELLED_DRUG]->(d:DrugLabel) "
+       "RETURN d.intervention AS drug, d.applicationNumber AS app" % (SCOPE.replace("'", "\\'"), TRIAL))
 check("%s label query answered" % TRIAL, True, not (r.get("reason") or r.get("error")))
 check("%s drugs with an FDA label = openFDA's" % TRIAL, labelled, {x["drug"]: x["app"] for x in r.get("rows") or []})
 
