@@ -156,10 +156,14 @@
 - name: drugLabelsByName
   kind: remote
   operation: searchDrugLabels
-  keyArg: search
+  # String mode: the key renders through keyTemplate into openFDA's one `search` parameter. With
+  # `keyArg: search` the template never reached it, openFDA got no query, and every drug "matched" the
+  # first label in the index. One name per call: limit 1 is per search, so names cannot share one.
   keyTemplate: 'openfda.generic_name:"{key}" OR openfda.brand_name:"{key}"'
+  maxKeysPerCall: 1
   echoKeyAs: intervention
   args:
+    search: "{keys}"
     limit: 1        # the current label; the full revision history is not the question here
   # openFDA answers a name it has no label for with a 404 whose body says exactly this. That is the
   # common, meaningful answer (most trial interventions are unapproved), so it is read as empty: no
