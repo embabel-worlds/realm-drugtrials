@@ -141,8 +141,9 @@ labelled = {n: a for n, a in ((n, fda_label(n)) for n in drugs) if a is not Fals
 # The label hop is keyed on the trial's interventions, which only the search that returned the trial
 # carries, so this one walks from the scope (a pinned trial holds its NCT id and nothing else).
 r = kg("MATCH (:DiseaseScope {registryQuery: '%s'})-[:HAS_TRIAL_SEARCH]->(:TrialSearchRun)-[:RETURNED]->(t:ClinicalTrial) "
-       "WHERE t.registryRecordId = '%s' MATCH (t)-[:TESTS_LABELLED_DRUG]->(d:DrugLabel) "
-       "RETURN d.intervention AS drug, d.applicationNumber AS app" % (SCOPE.replace("'", "\\'"), TRIAL))
+       "WHERE t.registryRecordId = '%s' MATCH (t)-[:TESTS_LABELLED_DRUG {ai: {fresh: true}}]->(d:DrugLabel) "
+       "RETURN d.intervention AS drug, d.applicationNumber AS app, d.brandName AS brand, d.genericName AS generic" % (SCOPE.replace("'", "\\'"), TRIAL))
+print("       label rows read cold: %s" % json.dumps(r.get("rows"))[:400])
 check("%s label query answered" % TRIAL, True, not (r.get("reason") or r.get("error")))
 check("%s drugs with an FDA label = openFDA's" % TRIAL, labelled, {x["drug"]: x["app"] for x in r.get("rows") or []})
 
