@@ -6,20 +6,31 @@
 # private copy per domain. The engine keeps every declared edge into a type, including edges declared in
 # a different realm, so these accumulate with the general ones instead of replacing them.
 #
-# REQUIRES realm-research to be installed. Without it these joins resolve to nothing and the trials
-# still read normally — sponsors and sites remain the plain strings the registry gave, which is a
-# smaller answer, not a wrong one.
+# realm.yml declares `requires: research`, because these joins name realm-research's producers and a
+# realm whose joins point at producers nobody declares does not validate. The trials themselves never
+# depend on it: sponsors and sites stay the plain strings the registry gave beside these edges.
 
 - name: CorporateEntity
   description: |
-    A trial's sponsor and collaborators, resolved to the company profile realm-research owns.
+    A trial's sponsor or collaborator: the company profile realm-research owns, identified by name (the
+    registry's spelling it was resolved for).
 
     Two edges, deliberately distinct. A sponsor runs the trial; a collaborator contributes to it. They
     are different relationships to the science and to the money, and collapsing them would make an
     industry partner on one academic trial indistinguishable from a company running fifty of its own.
+  # Restated word for word from realm-research, so these edges dedupe on the same identity the
+  # profile's own realm declares; realm-research stays the owner of the rest of the type.
+  properties:
+    name:
+      identity: true
+      description: "The name this profile was resolved for — the caller's own text, echoed back so it links to whatever asked."
   virtualJoins:
     - anchorLabel: ClinicalTrial
       relationship: SPONSORED_BY
+      description: >-
+        A trial to the company or organisation that runs it (one lead sponsor per trial), resolved by
+        name to realm-research's company profile. Many trials converge on one sponsor, so traverse it
+        backwards to count a company's trials. One name lookup per distinct sponsor, at most 400 per query.
       via: sponsor
       keyField: sponsor
       recordKeyField: name
@@ -31,6 +42,10 @@
     # trials naming the same company converge on a single node, which is what makes counting possible.
     - anchorLabel: ClinicalTrial
       relationship: COLLABORATES_WITH
+      description: >-
+        A trial to each organisation that contributes to it without running it (zero or more per trial),
+        resolved by name to realm-research's company profile. For who runs a trial use SPONSORED_BY.
+        One name lookup per distinct collaborator, at most 400 per query.
       via: collaborator
       keyField: collaborators
       recordKeyField: name
@@ -40,14 +55,25 @@
 
 - name: InstitutionProfile
   description: |
-    The sites a trial runs at, canonicalized to registry identities.
+    A site a trial runs at, identified by name (as the registry spells it) and canonicalized to a
+    registry identity.
 
     `facilities` is LIST-valued, so each site becomes its own key. Many trials at one hospital converge
     on one node — which is the whole point, since counting the raw strings would count a hospital once
     per spelling it registered under.
+  # Restated word for word from realm-research, so these edges dedupe on the same identity the
+  # profile's own realm declares; realm-research stays the owner of the rest of the type.
+  properties:
+    name:
+      identity: true
+      description: "The name this profile was resolved for — the source record's own text, echoed back so it links to whatever asked."
   virtualJoins:
     - anchorLabel: ClinicalTrial
       relationship: RUNS_AT
+      description: >-
+        A trial to each site it runs at (zero or more per trial), resolved to one institution identity
+        however the registry spelled it, so trials at the same hospital converge. One lookup per distinct
+        site and at most 100 sites per query: narrow the trials (country, status) before traversing.
       keyField: facilities
       recordKeyField: name
       producer: institutionsByName
@@ -58,11 +84,22 @@
 
 - name: ResearcherProfile
   description: |
-    The investigators a trial names, resolved to scholarly identities — the join that connects a trial to
-    the literature through a PERSON rather than through the trial's own registered citations.
+    An investigator a trial names, identified by name (as the registry spells it) and resolved to a
+    scholarly identity — the join that connects a trial to the literature through a PERSON rather than
+    through the trial's own registered citations.
+  # Restated word for word from realm-research, so these edges dedupe on the same identity the
+  # profile's own realm declares; realm-research stays the owner of the rest of the type.
+  properties:
+    name:
+      identity: true
+      description: "The name this profile was resolved for — the source record's own text, echoed back so it links to whatever asked."
   virtualJoins:
     - anchorLabel: ClinicalTrial
       relationship: LED_BY
+      description: >-
+        A trial to each overall official it names, usually the principal investigator, resolved to a
+        scholarly identity by name; a name match is probable, not certain. The costliest join here: one
+        lookup per person, at most 40 per query, so pick a few trials first.
       keyField: investigators
       recordKeyField: name
       producer: researchersByName

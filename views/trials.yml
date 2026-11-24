@@ -3,49 +3,60 @@
 # reports through POST /api/v1/views/{name}/invoke.
 
 - name: DiseaseTrialRuns
-  description: One live ClinicalTrials.gov search execution, with its trials and coverage reachable from the returned node.
+  description: >-
+    The live ClinicalTrials.gov search for one disease expression, as a node. Its trials (RETURNED) and
+    coverage (HAS_COVERAGE) are reachable from it. One search per call, up to 10,000 trials; when the
+    sweep hits that cap its coverage says PARTIAL_PAGE_CAP.
   outputLabel: TrialSearchRun
   params:
     registryQuery:
       type: string
       default: '"Long COVID" OR "Post-Acute Sequelae of SARS-CoV-2" OR PASC OR "Post-COVID Condition"'
-      description: "The exact ClinicalTrials.gov condition expression."
+      description: "The disease phrase or ClinicalTrials.gov condition expression to search; rewritten into the registry's Essie syntax before it is sent."
   cypher: |
     MATCH (scope:DiseaseScope {registryQuery: $registryQuery})-[:HAS_TRIAL_SEARCH]->(run:TrialSearchRun)
     RETURN run
 
 - name: DiseaseTrials
-  description: Current trial nodes returned for a disease expression; composable into downstream trial-detail traversals.
+  description: >-
+    The registered trials for one disease expression, as nodes to traverse further. Bounded by the
+    search's cap of 10,000 trials; covers only the expression given, never related conditions it does
+    not name. For a table use TrialLandscape.
   outputLabel: ClinicalTrial
   params:
     registryQuery:
       type: string
       default: '"Long COVID" OR "Post-Acute Sequelae of SARS-CoV-2" OR PASC OR "Post-COVID Condition"'
-      description: "The exact ClinicalTrials.gov condition expression."
+      description: "The disease phrase or ClinicalTrials.gov condition expression to search; rewritten into the registry's Essie syntax before it is sent."
   cypher: |
     MATCH (scope:DiseaseScope {registryQuery: $registryQuery})-[:HAS_TRIAL_SEARCH]->(run:TrialSearchRun)
     MATCH (run)-[:RETURNED]->(trial:ClinicalTrial)
     RETURN DISTINCT trial
 
 - name: TrialProtocol
-  description: Current protocol detail for one NCT id; references can then resolve to PubMed.
+  description: >-
+    The full protocol detail for one trial, by NCT id. Exactly one trial; outcomes and cited
+    references hang off the node, and references resolve to PubMed. Not the trial's posted results.
   outputLabel: TrialDetail
   params:
     nctId:
       type: string
       default: NCT05585970
-      description: "ClinicalTrials.gov NCT identifier."
+      description: "ClinicalTrials.gov NCT identifier, e.g. NCT05585970: NCT and eight digits."
   cypher: |
     MATCH (trial:ClinicalTrial {registryRecordId: $nctId})-[:HAS_CURRENT_DETAIL]->(detail:TrialDetail)
     RETURN detail
 
 - name: TrialLandscape
-  description: Directly runnable live disease landscape with source coverage and current registry fields.
+  description: >-
+    Every registered trial for one disease, one row each, with search coverage. Current registry
+    fields only, newest-updated first; at most 10,000 trials, and when coverageState is
+    PARTIAL_PAGE_CAP the list is not the whole registry answer. No protocol detail or publications.
   params:
     registryQuery:
       type: string
       default: '"Long COVID" OR "Post-Acute Sequelae of SARS-CoV-2" OR PASC OR "Post-COVID Condition"'
-      description: "The exact ClinicalTrials.gov condition expression."
+      description: "The disease phrase or ClinicalTrials.gov condition expression to search; rewritten into the registry's Essie syntax before it is sent."
   cypher: |
     MATCH (run:DiseaseTrialRuns {registryQuery: $registryQuery})
     MATCH (run)-[:HAS_COVERAGE]->(coverage:TrialCoverage)
@@ -59,12 +70,15 @@
     ORDER BY trial.lastUpdated DESC, trial.nctId ASC
 
 - name: CompletedTrialsWithoutRegistryResults
-  description: Completed trials whose current ClinicalTrials.gov record has no results section; an investigation queue, not a legal finding.
+  description: >-
+    Completed trials for a disease with no results posted to the registry. An investigation queue,
+    not a legal finding: results may be published elsewhere, and trials that are terminated, still
+    running or exempt are left out. Oldest completion first.
   params:
     registryQuery:
       type: string
       default: '"Long COVID" OR "Post-Acute Sequelae of SARS-CoV-2" OR PASC OR "Post-COVID Condition"'
-      description: "The exact ClinicalTrials.gov condition expression."
+      description: "The disease phrase or ClinicalTrials.gov condition expression to search; rewritten into the registry's Essie syntax before it is sent."
   cypher: |
     MATCH (trial:DiseaseTrials {registryQuery: $registryQuery})
     WHERE trial.overallStatus = 'COMPLETED' AND trial.hasResults = false
@@ -74,16 +88,19 @@
     ORDER BY trial.completionDate ASC, trial.nctId ASC
 
 - name: RecruitingTrialsByCountry
-  description: Currently recruiting disease trials with at least one registered location in a named country.
+  description: >-
+    Trials for a disease recruiting now with a site in one country. Only overallStatus RECRUITING:
+    not-yet-recruiting and invitation-only trials are left out. The country must be spelled as the
+    registry spells it.
   params:
     registryQuery:
       type: string
       default: '"Long COVID" OR "Post-Acute Sequelae of SARS-CoV-2" OR PASC OR "Post-COVID Condition"'
-      description: "The exact ClinicalTrials.gov condition expression."
+      description: "The disease phrase or ClinicalTrials.gov condition expression to search; rewritten into the registry's Essie syntax before it is sent."
     country:
       type: string
       default: Australia
-      description: "Country name as ClinicalTrials.gov reports it, e.g. Australia."
+      description: "Country name exactly as ClinicalTrials.gov spells it (e.g. Australia, United States, Korea, Republic of); matched exactly, not partially."
   cypher: |
     MATCH (trial:DiseaseTrials {registryQuery: $registryQuery})
     WHERE trial.overallStatus = 'RECRUITING' AND $country IN trial.countries

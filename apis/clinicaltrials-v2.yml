@@ -21,11 +21,16 @@ paths:
   /studies:
     get:
       operationId: searchStudies
-      summary: Search current ClinicalTrials.gov study records by condition.
+      summary: Search current ClinicalTrials.gov study records by condition, or read many by NCT id.
       parameters:
         - name: query.cond
           in: query
-          required: true
+          schema: { type: string }
+        - name: filter.ids
+          in: query
+          description: >
+            Comma-separated NCT ids. Returns those studies' full records (the same shape as
+            `/studies/{nctId}`); an id the registry does not hold is absent from the page.
           schema: { type: string }
         - name: query.term
           in: query

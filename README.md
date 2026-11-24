@@ -37,10 +37,9 @@ Sponsors, sites and investigators resolve to types that **realm-research owns**:
 organization or people names wants them — so they live in one place rather than being reimplemented per
 domain, and this realm contributes only the edges from its own anchors into them.
 
-There is no realm dependency mechanism yet, so this is a documented requirement rather than an enforced
-one. Install `realm-research` alongside this realm. Without it, the four edges below simply resolve to
-nothing: trials still read normally, with sponsors and sites as the plain strings the registry gave.
-That is a smaller answer, not a wrong one.
+`realm.yml` declares it (`requires: { research: "[0.3.0,1.0.0)" }`), so a host installs the two
+together. The trials never depend on it: sponsors and sites also stay the plain strings the registry
+gave, beside the four edges below.
 
 | Edge | Resolves to | Answers |
 |---|---|---|
@@ -111,6 +110,14 @@ npm install
 npm run check
 ```
 
+Against an appliance with this realm and realm-research installed, `tests/verify.sh` reconciles every
+view and figure with ClinicalTrials.gov, PubMed and openFDA directly, and checks the call counts (all
+three sources are keyless):
+
+```bash
+APPLIANCE=http://localhost:11043 AUTH=user:pass sh tests/verify.sh   # last line: ALL CHECKS PASS
+```
+
 The live sources can also be sanity-checked without installing the Realm:
 
 ```bash
@@ -126,9 +133,6 @@ curl -sS --get https://clinicaltrials.gov/api/v2/studies \
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Realm boundary, Virtual Cypher stages and view/Lens composition
 - [`docs/EVIDENCE_MODEL.md`](docs/EVIDENCE_MODEL.md) — claim boundaries, provenance and failure semantics
 - [`docs/RATE_LIMITS.md`](docs/RATE_LIMITS.md) — request budgets, batching, caches and public-service controls
-
-The much larger prior-art and product evidence trail lives with the WhatsBeenTried.org flagship
-research in the target-customers repository; this repository is the executable Realm slice.
 
 ## Source terms
 
