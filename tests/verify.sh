@@ -67,7 +67,9 @@ def calls(r, pattern): return sum(1 for c in r.get("apiCallLog") or [] if re.sea
 
 DISEASE = "Long COVID"   # the views' default scope, resolved to the expression below
 SCOPE = '"Long COVID" OR "Post-Acute Sequelae of SARS-CoV-2" OR PASC OR "Post-COVID Condition"'
-TRIAL = "NCT04280705"    # ACTT-1: registered outcomes, ten PubMed references, one FDA-labelled drug
+# A trial is reached through the scope search that returned it: a ClinicalTrial is a record a search
+# brought back, never one pinned from nowhere. So the single-trial checks take a trial FROM the
+# default scope, chosen below from the registry itself.
 COUNTRY = "Australia"
 
 print("== L1: every view answers by name on its defaults ==")
@@ -101,15 +103,23 @@ no_results = sorted(s["protocolSection"]["identificationModule"]["nctId"] for s 
 check("CompletedTrialsWithoutRegistryResults = the registry's", no_results,
       sorted({r["nctId"] for r in V["CompletedTrialsWithoutRegistryResults"]}))
 
+# The lowest NCT id in the scope that cites at least two PubMed articles and tests a drug.
+cands = ct({"query.cond": sent, "pageSize": 1000, "fields": "NCTId,ReferencePMID,InterventionType"}).get("studies", [])
+TRIAL = sorted(s["protocolSection"]["identificationModule"]["nctId"] for s in cands
+               if len([r for r in (s["protocolSection"].get("referencesModule") or {}).get("references", []) if r.get("pmid")]) >= 2
+               and any(i.get("type") == "DRUG" for i in (s["protocolSection"].get("armsInterventionsModule") or {}).get("interventions", [])))[0]
+FIVE = sorted(truth)[:5]
+print("  single-trial checks on %s; five-trial read on %s" % (TRIAL, FIVE))
+ANCHOR = "MATCH (:DiseaseScope {registryQuery: '%s'})-[:HAS_TRIAL_SEARCH]->(:TrialSearchRun)-[:RETURNED]->(t:ClinicalTrial) " % SCOPE.replace("'", "\\'")
 study = source("https://clinicaltrials.gov/api/v2/studies/%s" % TRIAL)["protocolSection"]
 outcomes = sum(len(v) for v in (study.get("outcomesModule") or {}).values())
 pmids = sorted({r["pmid"] for r in (study.get("referencesModule") or {}).get("references", []) if r.get("pmid")})
-d = (kg("MATCH (:ClinicalTrial {registryRecordId: '%s'})-[:HAS_CURRENT_DETAIL]->(d:TrialDetail) "
+d = (kg(ANCHOR + "WHERE t.registryRecordId = '%s' MATCH (t)-[:HAS_CURRENT_DETAIL]->(d:TrialDetail) "
         "RETURN d.rawOutcomeCount AS outcomes, d.rawReferenceCount AS refs" % TRIAL).get("rows") or [{}])[0]
 check("%s declared outcomes" % TRIAL, outcomes, d.get("outcomes"))
 pubmed = source("https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&retmode=json&id=" + ",".join(pmids))
 held = sorted(u for u in pubmed["result"].get("uids", []) if "error" not in pubmed["result"][u])
-pubs = kg("MATCH (:ClinicalTrial {registryRecordId: '%s'})-[:HAS_CURRENT_DETAIL]->(:TrialDetail)-[:CITES_REFERENCE]->(r:TrialReference) "
+pubs = kg(ANCHOR + "WHERE t.registryRecordId = '%s' MATCH (t)-[:HAS_CURRENT_DETAIL]->(:TrialDetail)-[:CITES_REFERENCE]->(r:TrialReference) "
           "MATCH (r)-[:RESOLVES_TO]->(p:Publication) RETURN DISTINCT p.pmid AS pmid, p.title AS title" % TRIAL).get("rows") or []
 check("%s references resolved = PubMed's articles" % TRIAL, held, sorted(r["pmid"] for r in pubs))
 titles = {u: pubmed["result"][u].get("title") for u in held}
@@ -121,7 +131,7 @@ for name in drugs:
     q = 'openfda.generic_name:"%s" OR openfda.brand_name:"%s"' % (name, name)
     r = source("https://api.fda.gov/drug/label.json?" + urllib.parse.urlencode({"search": q, "limit": 1}))
     if r and r.get("results"): labelled[name] = (r["results"][0].get("openfda", {}).get("application_number") or [None])[0]
-rows = kg("MATCH (:ClinicalTrial {registryRecordId: '%s'})-[:TESTS_LABELLED_DRUG]->(d:DrugLabel) "
+rows = kg(ANCHOR + "WHERE t.registryRecordId = '%s' MATCH (t)-[:TESTS_LABELLED_DRUG]->(d:DrugLabel) "
           "RETURN d.intervention AS drug, d.applicationNumber AS app" % TRIAL).get("rows") or []
 check("%s drugs with an FDA label = openFDA's" % TRIAL, labelled, {r["drug"]: r["app"] for r in rows})
 
@@ -133,14 +143,15 @@ r = kg("MATCH (:DiseaseScope {registryQuery: '%s'})-[:HAS_TRIAL_SEARCH {ai: {fre
 check("recruiting trials for the default scope", total_recruiting, ((r.get("rows") or [{}])[0]).get("n"))
 at_most("  ...records fetched (the filter reached the registry)", total_recruiting + 1, r.get("fetchedRecords"), r.get("apiCallLog"))
 # Several trials' details are one registry call (filter.ids), not one per trial.
-r = kg("MATCH (:DiseaseScope {registryQuery: '%s'})-[:HAS_TRIAL_SEARCH]->(:TrialSearchRun)-[:RETURNED]->(t:ClinicalTrial) "
-       "WITH t ORDER BY t.nctId LIMIT 5 "
-       "MATCH (t)-[:HAS_CURRENT_DETAIL {ai: {fresh: true}}]->(d:TrialDetail) RETURN count(d) AS n" % SCOPE.replace("'", "\\'"))
+# The five are named in WHERE, so only they are anchors for the detail hop (a LIMIT after the
+# search would not narrow the hop's anchors).
+r = kg(ANCHOR + "WHERE t.registryRecordId IN %s "
+       "MATCH (t)-[:HAS_CURRENT_DETAIL {ai: {fresh: true}}]->(d:TrialDetail) RETURN count(d) AS n" % json.dumps(FIVE))
 check("details for five trials", 5, ((r.get("rows") or [{}])[0]).get("n"))
 check("  ...without a per-trial read", 0, calls(r, r"getStudy|/studies/NCT"))
 at_most("  ...registry detail calls", 1, calls(r, r"trialDetailsByNct|detailsByNctIds"), r.get("apiCallLog"))
 # A trial's references resolve in one ESummary call.
-r = kg("MATCH (:ClinicalTrial {registryRecordId: '%s'})-[:HAS_CURRENT_DETAIL]->(:TrialDetail)-[:CITES_REFERENCE]->(ref:TrialReference) "
+r = kg(ANCHOR + "WHERE t.registryRecordId = '%s' MATCH (t)-[:HAS_CURRENT_DETAIL]->(:TrialDetail)-[:CITES_REFERENCE]->(ref:TrialReference) "
        "MATCH (ref)-[:RESOLVES_TO {ai: {fresh: true}}]->(p:Publication) RETURN count(DISTINCT p) AS n" % TRIAL)
 check("%s publications, read cold" % TRIAL, len(held), ((r.get("rows") or [{}])[0]).get("n"))
 at_most("  ...PubMed calls", 1, calls(r, r"publicationsByPmid"), r.get("apiCallLog"))
