@@ -6,7 +6,7 @@ description: |
   question needs, records how much of the registry each search covered, and never mirrors a registry.
   Sponsors, sites and investigators resolve to shared company, institution and researcher profiles
   through realm-research.
-version: 0.2.1
+version: 0.2.2
 author: Rod Johnson
 url: https://github.com/johnsonr/realm-drugtrials
 category: science
