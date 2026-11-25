@@ -26,6 +26,67 @@ base, auth = os.environ["APPLIANCE"].rstrip("/"), os.environ["AUTHCFG"]
 fail = 0
 UA = {"User-Agent": "realm-drugtrials-verify/0.2 (https://github.com/embabel-worlds/realm-drugtrials)"}
 
+# Whether an engine answer is the whole truth. A source that failed under load, a capped page or a
+# refused hop leaves the rows looking like an answer while the figure is short; reading the figure
+# and ignoring the rest reports drift that is not the realm's. short(d) is None when the answer is
+# whole, else what to print in place of the figure: "REFUSED: <why>" or "PARTIAL <n>: <reason>".
+# Query answers carry `error`, `reason`, `run` and string `warnings` opening with the engine's code;
+# a view envelope carries `status`, `outcome` and `warnings` as {code, message}.
+# Raw warning codes that mean rows or values may be missing (the engine's incompleteness kinds).
+# Cost notes (FILTERED_IN_GRAPH, AGGREGATE_NOT_PUSHED, EMPTY_NOT_KEPT, PUSHDOWN_VALUE_UNMATCHED),
+# FILTER_STARVED (an honest empty), STALE_COPY, FIELDS_WITHHELD and UNKNOWN_VIA leave every row in place.
+SHORT_CODES = (
+    "PARTIAL_RESULT", "PRODUCER_ERROR", "NEEDS_FILTER", "NEEDS_PRODUCER", "FILTER_REJECTED",
+    "UNPUSHED_FILTER", "AMBIGUOUS_LABEL", "INCOMPLETE_TRAVERSAL", "INCOMPLETE_RANKING",
+    "INCOMPLETE_AGGREGATE", "INCOMPLETE_INPUT", "MATERIALIZATION_FAILED", "REDUCTION_FAILED",
+    "UNPARSEABLE_ANSWER", "TERMS_UNAVAILABLE", "COMPUTE_FAILED", "PROPERTY_NOT_STORED",
+    "FOLLOW_CAPPED", "UNLINKED_CHILDREN", "RESOLUTION_DROPPED", "AGENTIC_DEGRADED",
+    "SOURCE_UNANSWERED",
+)
+# The typed `reason` a query result carries when it is not a clean answer and not an honest empty.
+SHORT_REASONS = ("UNBOUNDED", "PARTIAL_NOT_MATCHED", "UNPUSHED_FILTER", "DISCONNECTED",
+                 "INTERNAL_ERROR", "WRITE_IN_PROGRESS", "KILLED", "TOO_EXPENSIVE")
+# Public warning codes on a view envelope that mean the same.
+SHORT_PUBLIC = ("PARTIAL", "REDUCTION_FAILED", "COMPUTE_FAILED", "PROPERTY_NOT_STORED",
+                "AGENTIC_DEGRADED", "RATE_LIMITED", "SOURCE_UNAVAILABLE", "SOURCE_REJECTED",
+                "INVALID_FILTER", "UNPUSHED_FILTER", "TOO_BROAD", "FETCH_CAPPED",
+                "INDEX_UNAVAILABLE", "ARGUMENT_REFUSED")
+
+
+def short(d, figure=None):
+    tag = "PARTIAL" if figure is None else "PARTIAL %s" % (figure,)
+    if not isinstance(d, dict):
+        return "REFUSED: not an engine answer: " + str(d)[:160]
+    if "outcome" in d or "status" in d:  # a view envelope
+        err = d.get("error") or {}
+        if d.get("status") != "SUCCEEDED":
+            return "REFUSED: %s %s" % (d.get("status"), (err.get("code", "") + " " + err.get("message", "")).strip()[:160] if isinstance(err, dict) else str(err)[:160])
+        ws = [w for w in d.get("warnings") or [] if isinstance(w, dict) and w.get("code") in SHORT_PUBLIC]
+        if d.get("outcome") not in ("OK", "EMPTY") or ws:
+            why = ws[0]["code"] + ": " + ws[0].get("message", "") if ws else "outcome " + str(d.get("outcome"))
+            return "%s: %s" % (tag, why[:200])
+        return None
+    if d.get("error"):
+        return "REFUSED: " + str(d["error"])[:160]
+    if d.get("run"):
+        return "%s: the run had not finished (%s)" % (tag, d["run"])
+    ws = [w for w in d.get("warnings") or [] if isinstance(w, str) and w.split(":", 1)[0].strip() in SHORT_CODES]
+    if ws:
+        return "%s: %s" % (tag, ws[0][:200])
+    if d.get("reason") in SHORT_REASONS:
+        return "%s: reason %s" % (tag, d["reason"])
+    return None
+
+class Short(dict):
+    """A row standing in for a short answer: every column reads as the reason, so the check that
+    reads it fails with the engine's own words instead of counting what did come back."""
+    def __init__(self, why): super().__init__(); self.why = why
+    def get(self, k, default=None): return self.why
+    def __getitem__(self, k): return self.why
+    def __repr__(self): return self.why
+def figure(rows):
+    return list(rows[0].values())[0] if len(rows) == 1 and len(rows[0]) == 1 else len(rows)
+
 def post(path, body):
     out = subprocess.run(["curl", "-s", "-K", auth, "-X", "POST", base + path, "-H", "Content-Type: application/json",
                           "-d", json.dumps(body)], capture_output=True, text=True).stdout
@@ -35,7 +96,8 @@ def view(name, args=None): return post("/api/v1/views/%s/invoke" % name, {"args"
 def kg(cypher):
     r = post("/api/v1/admin/kg/execute", {"cypher": cypher})
     if r.get("reason") or r.get("error"): print("       (kg: %s %s)" % (r.get("reason"), str(r.get("error"))[:200]))
-    return r
+    s = short(r, figure(r.get("rows") or []))
+    return dict(r, rows=[Short(s)]) if s else r
 def source(url):
     for attempt in range(4):
         try: return json.load(urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60))
@@ -77,8 +139,9 @@ V = {}
 for name in ["DiseaseTrialRuns", "DiseaseTrials", "TrialProtocol", "TrialLandscape",
              "CompletedTrialsWithoutRegistryResults", "RecruitingTrialsByCountry"]:
     r = view(name); V[name] = r.get("data") or []
-    if r.get("status") != "SUCCEEDED":
-        print("  FAIL %-38s %s %s" % (name, r.get("status"), str(r.get("error"))[:200])); fail = 1
+    s = short(r, len(V[name]))
+    if s:
+        print("  FAIL %-38s %s" % (name, s)); fail = 1; V[name] = [Short(s)]
     else: print("  ok   %-38s %d rows" % (name, len(V[name])))
 for name in ["DiseaseTrialRuns", "DiseaseTrials", "TrialProtocol", "TrialLandscape"]:
     if not V[name]: print("  FAIL %s answered no rows on its defaults" % name); fail = 1
@@ -87,7 +150,7 @@ print("== L2: the realm's figures are the sources' figures ==")
 run = (kg("MATCH (:DiseaseScope {registryQuery: '%s'})-[:HAS_TRIAL_SEARCH]->(r:TrialSearchRun) "
           "RETURN r.scopeQuery AS scopeQuery, r.sourceTotal AS sourceTotal, r.capped AS capped" % SCOPE.replace("'", "\\'"))
        .get("rows") or [{}])[0]
-sent = run.get("scopeQuery") or SCOPE
+sent = SCOPE if isinstance(run, Short) else (run.get("scopeQuery") or SCOPE)
 truth = ct_all({"query.cond": sent})
 print("  registry expression: %s" % sent)
 check("source total for the default scope", len(truth), run.get("sourceTotal"))
