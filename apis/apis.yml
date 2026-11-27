@@ -25,4 +25,6 @@
 - url: openfda.yaml
   name: openfda
   type: openapi
+  operation-ids:
+    - searchDrugLabels
   auth: none
